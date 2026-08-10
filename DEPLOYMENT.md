@@ -1,36 +1,31 @@
 # Thông Tin Deploy — Checkpoint 5
 
-> Điền file này sau khi deploy xong. `pytest tests/test_cp5.py` đọc file này
-> để tìm địa chỉ service của bạn và gọi thử.
->
+> Service đã deploy thật trên Render.
 > **Chỉ ghi TÊN biến môi trường, tuyệt đối không dán giá trị token vào đây.**
-> Repo này công khai — dán token vào là mất token.
 
 ## Thông Tin Học Viên
 
 | Mục | Nội dung |
 |-----|----------|
-| Họ và tên | (điền họ tên) |
-| Mã học viên | (điền mã học viên) |
-| Repo | (điền link repo K4-DAY12-...) |
+| Họ và tên | Pham Quoc Bao |
+| Mã học viên | 2A202601502 |
+| Repo | https://github.com/phamquocbao1500499-dev/K4-Day12-2A202601502-PhamQuocBao |
 
 ## Service
 
 | Mục | Nội dung |
 |-----|----------|
-| Public URL | https://TODO-thay-bang-url-that.up.railway.app |
-| Platform | Railway / Render / Cloud Run — (điền platform bạn dùng) |
-| Ngày deploy | (điền ngày) |
+| Public URL | https://day12-chat-1lr6.onrender.com |
+| Platform | Render (Blueprint từ `render.yaml`) |
+| Ngày deploy | 2026-08-10 |
 
 ## Biến Môi Trường Đã Set Trên Cloud
 
-Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
-
 | Biến | Đã set | Ghi chú |
 |------|--------|---------|
-| `PORT` | ✅ | platform tự gán |
-| `API_TOKEN` | ✅ | đặt trong dashboard, không nằm trong repo |
-| `REDIS_URL` | ✅ | (điền: Redis add-on của platform / Upstash / ...) |
+| `PORT` | ✅ | Render tự gán |
+| `API_TOKEN` | ✅ | sinh bằng `secrets.token_urlsafe(32)`, đặt trong dashboard (sync: false) |
+| `REDIS_URL` | ✅ | Render tự gắn từ Redis add-on `day12-chat-redis` (thông qua `fromService`) |
 | `BUCKET_CAPACITY` | ✅ | 10 |
 | `REFILL_PER_MINUTE` | ✅ | 10 |
 | `DAILY_BUDGET_USD` | ✅ | 1.0 |
@@ -38,65 +33,51 @@ Ghi tên biến và **nguồn giá trị**, không ghi giá trị:
 
 ## Lệnh Kiểm Tra
 
-Thay `<URL>` bằng Public URL ở trên:
-
-```bash
+```powershell
 # 1. Liveness — mong đợi 200 {"status":"ok"}
-curl -i <URL>/healthz
+curl.exe -i https://day12-chat-1lr6.onrender.com/healthz
 
 # 2. Readiness — mong đợi 200 {"status":"ready"} (đã nối được Redis)
-curl -i <URL>/readyz
+curl.exe -i https://day12-chat-1lr6.onrender.com/readyz
 
 # 3. Không có token — mong đợi 401 kèm header WWW-Authenticate
-curl -i -X POST <URL>/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Hello"}'
+curl.exe -i -X POST https://day12-chat-1lr6.onrender.com/chat -H "Content-Type: application/json" -d '{\"message\":\"Hello\"}'
 
 # 4. Có token — mong đợi 200 kèm câu trả lời
-curl -i -X POST <URL>/chat \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $API_TOKEN" \
-  -H "X-Client-Id: sv-test" \
-  -d '{"message":"Deploy là gì?"}'
+$TOKEN = $env:API_TOKEN   # hoặc dán thẳng token vào
+'{"message":"Deploy la gi"}' | Set-Content body.json -Encoding utf8
+curl.exe -i -X POST https://day12-chat-1lr6.onrender.com/chat -H "Content-Type: application/json; charset=utf-8" -H "Authorization: Bearer $TOKEN" -H "X-Client-Id: sv-test" --data-binary "@body.json"
 
 # 5. Rate limit — gọi 15 lần, những lần cuối phải trả 429
-for i in $(seq 1 15); do
-  curl -s -o /dev/null -w "%{http_code} " -X POST <URL>/chat \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer $API_TOKEN" \
-    -H "X-Client-Id: sv-test" \
-    -d '{"message":"test"}'
-done; echo
+for ($i=1; $i -le 15; $i++) {
+  (curl.exe -s -o $null -w "%{http_code} " -X POST https://day12-chat-1lr6.onrender.com/chat -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" -H "X-Client-Id: sv-test" --data-binary "@body.json")
+}; Write-Host ""
 ```
 
 ## Kết Quả Chạy Thật
 
-Dán output của các lệnh trên vào đây:
-
 ```
-(điền output)
+# /healthz
+HTTP/1.1 200 OK
+Content-Type: application/json
+{"status":"ok","service":"day12-chat-service","version":"1.0.0"}
+
+# /readyz
+HTTP/1.1 200 OK
+{"status":"ready","redis":true}
+
+# /chat (không token)
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer
+{"detail":"invalid or missing bearer token"}
+
+# /chat (có token)
+HTTP/1.1 200 OK
+{"reply":"Ngắn gọn: Render la gi phụ thuộc vào ba yếu tố — cấu hình qua biến môi trường, health check để orchestrator biết trạng thái, và giới hạn tài nguyên.","client_id":"sv-test","turns_before":0,"usd_cost":2.265e-05,"usage":{"prompt":3,"completion":37}}
 ```
 
 ## Ảnh Chụp Màn Hình
 
-Đặt ảnh trong thư mục `screenshots/`:
-
-- `screenshots/dashboard.png` — trang quản lý service trên platform
-- `screenshots/healthz.png` — kết quả gọi `/healthz` từ trình duyệt hoặc curl
-
----
-
-## Nếu Dùng Phương Án Dự Phòng
-
-Không đăng ký được tài khoản cloud? Vẫn nộp được bài, nhưng CP5 tối đa 60% điểm:
-
-1. Đặt `LOCAL_FALLBACK=true` trong `.env`
-2. Chạy `docker compose up -d` rồi kiểm tra `docker compose ps`
-3. Chụp màn hình vào `screenshots/`
-4. Chạy `pytest tests/test_cp5.py -v` — bộ test sẽ tự chuyển sang kiểm tra
-   `http://localhost:8000`
-5. Ghi rõ lý do không deploy được vào phần dưới đây:
-
-```
-(điền lý do nếu dùng phương án dự phòng, ngược lại xóa mục này)
-```
+Đặt trong `screenshots/`:
+- `dashboard.png` — Render dashboard của service `day12-chat`
+- `healthz.png` — kết quả gọi `/healthz`
